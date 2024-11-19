@@ -16,32 +16,33 @@ public:
     void makeMove(vector<vector<char>>& board, char symbol) override {
         int x, y;
         while (true) {
-            cout << "Enter your move (row and column, starting from 1): ";
+            cout << "Enter your move (row and column, starting from 1): "; // Запрос хода у пользователя
             cin >> x >> y;
-            x--; y--; // Convert to array indices
+            x--; y--; // Преобразование в индексы массива
             if (x >= 0 && x < board.size() && y >= 0 && y < board.size() && board[x][y] == ' ') {
                 board[x][y] = symbol;
                 break;
             } else {
-                cout << "Invalid move. Try again.\n";
+                cout << "Invalid move. Try again.\n"; // Сообщение об ошибке
             }
         }
     }
 };
 
-// Класс для управления ходами бота с эвристической оценкой
+// Класс для управления ходами бота
 class Bot : public Player {
 public:
     void makeMove(vector<vector<char>>& board, char symbol) override {
         int bestScore = numeric_limits<int>::min();
         int bestRow = -1, bestCol = -1;
 
-        // Проходим по всем возможным ходам и выбираем лучший на основе эвристической оценки
+        // Проходим по всем возможным ходам и выбираем лучший
         for (int i = 0; i < board.size(); i++) {
             for (int j = 0; j < board.size(); j++) {
                 if (board[i][j] == ' ') {
                     board[i][j] = symbol;
-                    int score = evaluateBoard(board, symbol);
+                    // Оценка хода с использованием минимакса и альфа-бета отсечений
+                    int score = minimax(board, false, symbol, getOpponent(symbol), numeric_limits<int>::min(), numeric_limits<int>::max());
                     board[i][j] = ' ';
                     if (score > bestScore) {
                         bestScore = score;
@@ -52,75 +53,48 @@ public:
             }
         }
         board[bestRow][bestCol] = symbol;
-        cout << "Bot made a move at (" << bestRow + 1 << ", " << bestCol + 1 << ")\n";
+        cout << "Bot made a move at (" << bestRow + 1 << ", " << bestCol + 1 << ")\n"; // Сообщение о ходе бота
     }
 
-    // Эвристическая функция оценки игрового поля
-    int evaluateBoard(const vector<vector<char>>& board, char symbol) {
-        int score = 0;
+    // Реализация алгоритма минимакса с альфа-бета отсечениями
+    int minimax(vector<vector<char>>& board, bool isMaximizing, char botSymbol, char playerSymbol, int alpha, int beta) {
+        // Эвристика: проверка на победу
+        if (checkWin(board, botSymbol)) return 1;
+        if (checkWin(board, playerSymbol)) return -1;
+        if (isBoardFull(board)) return 0;
 
-        // Оценка строк, столбцов и диагоналей
-        score += evaluateLines(board, symbol);
-        score -= evaluateLines(board, getOpponent(symbol));
+        int bestScore = isMaximizing ? numeric_limits<int>::min() : numeric_limits<int>::max();
 
-        return score;
-    }
+        for (int i = 0; i < board.size(); i++) {
+            for (int j = 0; j < board.size(); j++) {
+                if (board[i][j] == ' ') {
+                    board[i][j] = isMaximizing ? botSymbol : playerSymbol;
+                    // Рекурсивная оценка хода
+                    int score = minimax(board, !isMaximizing, botSymbol, playerSymbol, alpha, beta);
+                    board[i][j] = ' ';
 
-    // Оценка строк, столбцов и диагоналей для данного символа
-    int evaluateLines(const vector<vector<char>>& board, char symbol) {
-        int score = 0;
-        int size = board.size();
+                    if (isMaximizing) {
+                        bestScore = max(score, bestScore);
+                        alpha = max(alpha, bestScore);
+                    } else {
+                        bestScore = min(score, bestScore);
+                        beta = min(beta, bestScore);
+                    }
 
-        // Оценка строк и столбцов
-        for (int i = 0; i < size; i++) {
-            score += evaluateLine(board, i, 0, 0, 1, symbol); // Строка
-            score += evaluateLine(board, 0, i, 1, 0, symbol); // Столбец
-        }
-
-        // Оценка диагоналей
-        score += evaluateLine(board, 0, 0, 1, 1, symbol); // Главная диагональ
-        score += evaluateLine(board, 0, size - 1, 1, -1, symbol); // Побочная диагональ
-
-        return score;
-    }
-
-    // Оценка отдельной линии (строка, столбец или диагональ)
-    int evaluateLine(const vector<vector<char>>& board, int startX, int startY, int dx, int dy, char symbol) {
-        int count = 0;
-        int size = board.size();
-
-        // Проходим по линии и считаем количество совпадений
-        for (int i = 0; i < size; i++) {
-            int x = startX + i * dx;
-            int y = startY + i * dy;
-            if (x >= 0 && x < size && y >= 0 && y < size) {
-                if (board[x][y] == symbol) {
-                    count++;
-                } else if (board[x][y] != ' ') {
-                    return 0; // Прерываем, если линия заблокирована
+                    // Условие для отсечения
+                    if (beta <= alpha) break;
                 }
             }
+            if (beta <= alpha) break;
         }
-
-        // Если вся линия состоит из одного символа, возвращаем высокий балл
-        if (count == size) {
-            return 10;
-        } else if (count == size - 1) {
-            return 5;
-        }
-        return 0;
+        return bestScore;
     }
 
-    // Получение символа противника
-    char getOpponent(char symbol) {
-        return (symbol == 'X') ? 'O' : 'X';
-    }
-
-    // Проверка на выигрыш для данного символа (строки, столбцы, диагонали)
+    // Проверка на выигрыш
     bool checkWin(const vector<vector<char>>& board, char symbol) {
         int size = board.size();
 
-        // Проверка строк
+        // Проверка по строкам
         for (int i = 0; i < size; i++) {
             bool rowWin = true;
             for (int j = 0; j < size; j++) {
@@ -132,7 +106,7 @@ public:
             if (rowWin) return true;
         }
 
-        // Проверка столбцов
+        // Проверка по столбцам
         for (int i = 0; i < size; i++) {
             bool colWin = true;
             for (int j = 0; j < size; j++) {
@@ -164,9 +138,22 @@ public:
         }
         return secondaryDiagonalWin;
     }
+
+    // Проверка на заполненность поля
+    bool isBoardFull(const vector<vector<char>>& board) {
+        for (const auto& row : board)
+            for (char cell : row)
+                if (cell == ' ') return false;
+        return true;
+    }
+
+    // Получение символа противника
+    char getOpponent(char symbol) {
+        return (symbol == 'X') ? 'O' : 'X';
+    }
 };
 
-// Класс игры
+// Класс игры "Крестики-нолики"
 class TicTacToe {
 private:
     vector<vector<char>> board;
@@ -202,13 +189,13 @@ public:
 
     // Проверка на заполненность поля
     bool isBoardFull() {
-        for (const auto& row : board)
+        for (const auto &row : board)
             for (char cell : row)
                 if (cell == ' ') return false;
         return true;
     }
 
-    // Проверка на выигрыш
+    // Проверка на победу
     bool checkWin(char symbol) {
         return bot.checkWin(board, symbol);
     }
@@ -221,12 +208,12 @@ public:
             player.makeMove(board, PLAYER_SYMBOL);
             if (checkWin(PLAYER_SYMBOL)) {
                 displayBoard();
-                cout << "Congratulations! You win!\n";
+                cout << "Congratulations! You win!\n"; // Сообщение о победе игрока
                 break;
             }
             if (isBoardFull()) {
                 displayBoard();
-                cout << "It's a draw!\n";
+                cout << "It's a draw!\n"; // Сообщение о ничьей
                 break;
             }
 
@@ -234,19 +221,19 @@ public:
             bot.makeMove(board, BOT_SYMBOL);
             if (checkWin(BOT_SYMBOL)) {
                 displayBoard();
-                cout << "Bot wins! Try again!\n";
+                cout << "Bot wins! Try again!\n"; // Сообщение о победе бота
                 break;
             }
             if (isBoardFull()) {
                 displayBoard();
-                cout << "It's a draw!\n";
+                cout << "It's a draw!\n"; // Сообщение о ничьей
                 break;
             }
         }
     }
 };
 
-// Точка входа в программу
+// Главная функция
 int main() {
     int boardSize;
     cout << "Enter the board size: ";
